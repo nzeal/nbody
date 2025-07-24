@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h> // For strcpy and strcmp
+#include <string.h>
 #include <math.h>
 #include <time.h>
 #include "particle.h"
@@ -16,12 +16,12 @@ typedef struct {
     double dt;
     double t_end;
     double softening;
-    double theta;  // Barnes-Hut opening angle
+    double theta;
     int output_freq;
     int use_tree;
     int use_grid;
     char output_prefix[256];
-    char output_dir[256]; // Output directory
+    char output_dir[256];
 } SimulationParams;
 
 void print_usage(const char *program_name) {
@@ -38,7 +38,59 @@ void print_usage(const char *program_name) {
     printf("  -grid        Use grid-based Poisson solver\n");
     printf("  -o <string>  Output prefix (default: 'particles')\n");
     printf("  -outdir <string> Output directory (default: './data')\n");
+    printf("  -input <file> Input file with parameters\n");
     printf("  -h           Show this help\n");
+}
+
+// Helper: trim whitespace in-place (left and right)
+void trim(char *str) {
+    char *end;
+    // Trim leading
+    while(*str && (*str == ' ' || *str == '\t')) str++;
+    // Trim trailing
+    end = str + strlen(str) - 1;
+    while(end > str && (*end == ' ' || *end == '\t' || *end == '\n' || *end == '\r')) *end-- = 0;
+}
+
+void parse_input_file(const char *filename, SimulationParams *params) {
+    FILE *fp = fopen(filename, "r");
+    if (!fp) {
+        fprintf(stderr, "Error: cannot open input file: %s\n", filename);
+        exit(1);
+    }
+    char line[512];
+    while (fgets(line, sizeof(line), fp)) {
+        char *eq = strchr(line, '=');
+        if (!eq) continue;
+        *eq = 0;
+        char *key = line, *value = eq + 1;
+        trim(key); trim(value);
+
+        if (strcmp(key, "n_particles") == 0)
+            params->n_particles = atoi(value);
+        else if (strcmp(key, "box_size") == 0)
+            params->box_size = atof(value);
+        else if (strcmp(key, "dt") == 0)
+            params->dt = atof(value);
+        else if (strcmp(key, "t_end") == 0)
+            params->t_end = atof(value);
+        else if (strcmp(key, "softening") == 0)
+            params->softening = atof(value);
+        else if (strcmp(key, "theta") == 0)
+            params->theta = atof(value);
+        else if (strcmp(key, "output_freq") == 0)
+            params->output_freq = atoi(value);
+        else if (strcmp(key, "use_tree") == 0)
+            params->use_tree = atoi(value);
+        else if (strcmp(key, "use_grid") == 0)
+            params->use_grid = atoi(value);
+        else if (strcmp(key, "output_prefix") == 0)
+            strncpy(params->output_prefix, value, sizeof(params->output_prefix)-1);
+        else if (strcmp(key, "output_dir") == 0)
+            strncpy(params->output_dir, value, sizeof(params->output_dir)-1);
+        // Ignore unknown keys
+    }
+    fclose(fp);
 }
 
 void parse_arguments(int argc, char *argv[], SimulationParams *params) {
@@ -53,8 +105,16 @@ void parse_arguments(int argc, char *argv[], SimulationParams *params) {
     params->use_tree = 0;
     params->use_grid = 0;
     strcpy(params->output_prefix, "particles");
-    strcpy(params->output_dir, "./data"); // Default output directory
+    strcpy(params->output_dir, "./data");
 
+    // First pass: look for -input
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-input") == 0 && i + 1 < argc) {
+            parse_input_file(argv[++i], params);
+        }
+    }
+
+    // Second pass: parse other arguments (override file)
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-n") == 0 && i + 1 < argc) {
             params->n_particles = atoi(argv[++i]);
@@ -82,12 +142,13 @@ void parse_arguments(int argc, char *argv[], SimulationParams *params) {
             print_usage(argv[0]);
             exit(0);
         }
+        // -input is already handled
     }
 }
 
 int main(int argc, char *argv[]) {
     SimulationParams params;
-    parse_arguments(argc, argv, &params); // Fixed typo: ¶ms to params
+    parse_arguments(argc, argv, &params);
 
     printf("=== Vlasov-Poisson N-body Simulation ===\n");
     printf("Particles: %d\n", params.n_particles);
@@ -103,100 +164,73 @@ int main(int argc, char *argv[]) {
     printf("Output directory: %s\n", params.output_dir);
     printf("\n");
 
-    // Initialize particle system
     ParticleSystem *sys = init_particle_system(params.n_particles, params.box_size);
-
-    // Initialize with Plummer sphere
     init_plummer_sphere(sys, 1.0);
 
-    // Initialize Barnes-Hut tree if needed
     BHTree *tree = NULL;
     if (params.use_tree) {
         tree = create_tree(params.theta);
     }
 
-    // Initialize grid if needed
     Grid3D *grid = NULL;
     if (params.use_grid) {
-        int grid_size = (int)cbrt(params.n_particles / 8);  // Rough heuristic
+        int grid_size = (int)cbrt(params.n_particles / 8);
         grid_size = fmax(32, fmin(128, grid_size));
         grid = create_grid(grid_size, grid_size, grid_size, params.box_size);
         printf("Grid size: %d^3\n", grid_size);
     }
 
-    // Main simulation loop
     double time = 0.0;
     int step = 0;
     int n_steps = (int)(params.t_end / params.dt);
 
     clock_t start_time = clock();
-
-    // Initial output
     write_particles_txt(sys, params.output_dir, params.output_prefix, 0);
     print_system_stats(sys, 0, 0.0);
 
     printf("\nStarting simulation...\n");
 
     for (step = 1; step <= n_steps; step++) {
-        // Reset forces
         reset_forces(sys);
-
-        // Compute gravitational forces
         if (params.use_tree) {
             build_tree(tree, sys);
             compute_gravity_tree(sys, tree, params.softening);
         } else {
             compute_gravity_direct(sys, params.softening);
         }
-
-        // Add grid-based forces if using Poisson solver
         if (params.use_grid) {
             particles_to_grid(sys, grid);
             solve_poisson_fft(grid);
             compute_electric_field(grid);
             grid_to_particles(sys, grid);
         }
-
-        // Integrate equations of motion
         integrate_leapfrog(sys, params.dt);
-
         time += params.dt;
-
-        // Output
         if (step % params.output_freq == 0) {
             write_particles_txt(sys, params.output_dir, params.output_prefix, step);
             print_system_stats(sys, step, time);
-
-            // Write energy log (fixed: include time parameter)
             double ke = compute_kinetic_energy(sys);
             double pe = compute_potential_energy(sys, params.softening);
             write_energy_log(sys, params.output_dir, time, ke, pe, "energy_log.txt");
         }
-
-        // Progress indicator
         if (step % (n_steps / 10) == 0) {
             printf("Progress: %d%% (Step %d/%d)\n",
                    (int)(100.0 * step / n_steps), step, n_steps);
         }
     }
-
     clock_t end_time = clock();
     double cpu_time = ((double)(end_time - start_time)) / CLOCKS_PER_SEC;
-
     printf("\nSimulation completed!\n");
     printf("Total time: %.2f seconds\n", cpu_time);
     printf("Time per step: %.4f seconds\n", cpu_time / n_steps);
     printf("Particle updates per second: %.0f\n",
            (double)params.n_particles * n_steps / cpu_time);
 
-    // Final output
     write_particles_txt(sys, params.output_dir, params.output_prefix, step);
     write_particles_binary(sys, params.output_dir, params.output_prefix, step);
 
-    // Cleanup
     free_particle_system(sys);
     if (tree) free_tree(tree);
     if (grid) free_grid(grid);
-
     return 0;
 }
