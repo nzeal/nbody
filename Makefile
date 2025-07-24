@@ -1,6 +1,6 @@
 # Compiler and flags
 CC = nvc
-CFLAGS = -O3 -acc -Minfo=accel \
+CFLAGS = -O3 -acc -gpu=cc80 -Minfo=accel \
          -I/leonardo/prod/spack/06/install/0.22/linux-rhel8-icelake/nvhpc-24.5/hdf5-1.14.3-2soj72l4cjp6mx7chrqu3h2qxzmrugnc/include \
          -I/leonardo/prod/spack/06/install/0.22/linux-rhel8-icelake/gcc-8.5.0/nvhpc-24.5-torlmnyzcexnrs6pq4cccabv7ehkv3xy/Linux_x86_64/24.5/comm_libs/12.4/hpcx/hpcx-2.19/ompi/include
 
