@@ -1,4 +1,4 @@
-# N-body Simulation: Algorithm and Implementation Details
+# N-body Simulation: Algorithm and Implementation Detailshttps://github.com/nzeal/nbody/blob/main/README.md
 
 This document provides a comprehensive overview of the algorithmic implementation used in this N-body simulation codebase. The primary goal of the simulation is to evolve a system of particles under their mutual gravitational (or electrostatic) interaction, with optional support for grid-based field solvers.
 
