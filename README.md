@@ -161,6 +161,8 @@ void integrate_rk4(ParticleSystem *sys, double dt);
 
 ## 9. References
 
+- https://www.cs.princeton.edu/courses/archive/fall03/cs126/assignments/nbody.html
+- https://www.cs.princeton.edu/courses/archive/fall03/cs126/assignments/barnes-hut.html
 - Barnes, J., & Hut, P. (1986). "A hierarchical O(N log N) force-calculation algorithm". Nature.
 - Hockney, R. W., & Eastwood, J. W. (1988). "Computer Simulation Using Particles". CRC Press.
 
