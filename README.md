@@ -168,7 +168,7 @@ void integrate_rk4(ParticleSystem *sys, double dt);
 
 ## 10. Summary
 
-This implementation balances performance and accuracy by supporting both direct and tree-based force calculations, optional grid-based solvers, and efficient time integration.
+- This implementation balances performance and accuracy by supporting both direct and tree-based force calculations, optional grid-based solvers, and efficient time integration.
 ---
 
 **For further exploration, refer to the [source code](https://github.com/nzeal/nbody/tree/053ccd68796730cdec29429bf319bceefd868208/source) and [README](https://github.com/nzeal/nbody/blob/053ccd68796730cdec29429bf319bceefd868208/README.md).**
